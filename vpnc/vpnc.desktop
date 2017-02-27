@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Name=vpnc
+
+GenericName=OpenVPN control
+
+Exec=bash -c '/usr/bin/python /home/data/science/github/apps4linux/vpnc/vpnc.py'
+Terminal=true
+Icon=/home/data/science/github/apps4linux/vpnc/vpnc.svg
+Type=Application
+
+Categories=System;

@@ -3,12 +3,13 @@
 # ssh-keygen -t rsa -b 4096 -C "your_email@example.com"
 from __future__ import print_function, division
 try:
-    import Tkinter as tk
+    from Tkinter import Tk, mainloop, StringVar, Label, Button
 except:
-    import tkinter as tk
+    from tkinter import Tk, mainloop, StringVar, Label, Button
 from subprocess import call, Popen, PIPE
 from time import sleep, strftime
 from threading import Thread
+from Queue import Queue
 
 
 def restartopenvpn():
@@ -20,39 +21,48 @@ def restartopenvpn():
 def run():
     tuncmd = 'ssh root@192.168.0.1 "ping -I tun0 -c1 8.8.8.8 | grep ttl"'
     wlncmd = 'ssh root@192.168.0.1 "ping -I wlan0 -c1 8.8.8.8 | grep ttl"'
-    while True:
-        timestr.set(strftime('%H:%M:%S'))
+    while 1:
         try:
-            ptuncmd = Popen(tuncmd, stdout=PIPE, stderr=PIPE, shell=True)
-            pwlncmd = Popen(wlncmd, stdout=PIPE, stderr=PIPE, shell=True)
-            tuncmdout, _ = ptuncmd.communicate()
+            pwlncmd = Popen(wlncmd, stdout=PIPE, shell=True)
             wlncmdout, _ = pwlncmd.communicate()
-            tunstr.set(tuncmdout.split("time=", 1)[1].rstrip('\n'))
-            wlanstr.set(wlncmdout.split("time=", 1)[1].rstrip('\n'))
+            wlanstr = wlncmdout.split("time=", 1)[1].rstrip()
+            wlanstr = '   WLAN:   ' + wlanstr + strftime('   (%H:%M:%S)')
         except:
-            tunstr.set('failed')
-            wlanstr.set('failed')
-        sleep(1.1)
+            wlanstr = '   WLAN:   ' + 'failed' + strftime('   (%H:%M:%S)')
+        #wlnstrvar.set(wlanstr)
+        q.put(wlanstr)
+        root.event_generate('<<update_wlnstrvar>>', when='tail')
+        try:
+            ptuncmd = Popen(tuncmd, stdout=PIPE, shell=True)
+            tuncmdout, _ = ptuncmd.communicate()
+            tunstr = tuncmdout.split("time=", 1)[1].rstrip()
+            tunstr = 'TUNNEL:   ' + tunstr + strftime('   (%H:%M:%S)')
+        except:
+            tunstr = 'TUNNEL:   ' + 'failed' + strftime('   (%H:%M:%S)')
+        #tunstrvar.set(tunstr)
+        q.put(tunstr)
+        root.event_generate('<<update_tunstrvar>>', when='tail')
+        sleep(1)
 
 
 def status():
-    t_run = Thread(target=run, args=())
+    t_run = Thread(target=run)
     t_run.setDaemon(True)
     t_run.start()
 
-root = tk.Tk()
-root.title('VPN STATUS')
 
-timestr = tk.StringVar()
-wlanstr = tk.StringVar()
-tunstr = tk.StringVar()
-status()
-
-timelabel = tk.Label(root, fg='green', textvariable=timestr).pack()
-wlan0label = tk.Label(root, fg='green', textvariable=wlanstr).pack()
-tun0label = tk.Label(root, fg='green', textvariable=tunstr).pack()
-restart = tk.Button(root, text='Restart', width=20, command=restartopenvpn).pack()
-quitbut = tk.Button(root, text='Exit', width=20, command=root.destroy).pack()
-
-
-root.mainloop()
+if __name__ == '__main__':
+    root = Tk()
+    q = Queue()
+    root.title('VPN STATUS')
+    wlnstrvar = StringVar()
+    tunstrvar = StringVar()
+    update_wlnstrvar = lambda event: wlnstrvar.set(q.get())
+    update_tunstrvar = lambda event: tunstrvar.set(q.get())
+    root.bind('<<update_wlnstrvar>>', update_wlnstrvar)
+    root.bind('<<update_tunstrvar>>', update_tunstrvar)
+    wln0label = Label(root, fg='blue', textvariable=wlnstrvar).pack()
+    tun0label = Label(root, fg='red', textvariable=tunstrvar).pack()
+    restart = Button(root, text='Restart', width=25, command=restartopenvpn).pack()
+    status()
+    mainloop()

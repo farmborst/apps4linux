@@ -4,8 +4,7 @@ Name=vpnc
 
 GenericName=OpenVPN control
 
-Exec=bash -c '/usr/bin/python /home/data/science/github/apps4linux/vpnc/vpnc.py'
-Terminal=true
+Exec=/home/data/science/github/apps4linux/vpnc/vpnc.py
 Icon=/home/data/science/github/apps4linux/vpnc/vpnc.svg
 Type=Application
 

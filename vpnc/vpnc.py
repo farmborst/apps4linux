@@ -18,8 +18,22 @@ def restartopenvpn():
     sleep(3)
 
 
-def run():
+def runtun():
     tuncmd = 'ssh root@192.168.0.1 "ping -I tun0 -c1 8.8.8.8 | grep ttl"'
+    while 1:
+        try:
+            ptuncmd = Popen(tuncmd, stdout=PIPE, shell=True)
+            tuncmdout, _ = ptuncmd.communicate()
+            tunstr = tuncmdout.split("time=", 1)[1].rstrip()
+            tunstr = 'TUNNEL:   ' + tunstr + strftime('   (%H:%M:%S)')
+        except:
+            tunstr = 'TUNNEL:   ' + 'failed' + strftime('   (%H:%M:%S)')
+        q.put(tunstr)
+        root.event_generate('<<update_tunstrvar>>', when='tail')
+        sleep(1)
+
+
+def runwln():
     wlncmd = 'ssh root@192.168.0.1 "ping -I wlan0 -c1 8.8.8.8 | grep ttl"'
     while 1:
         try:
@@ -29,26 +43,18 @@ def run():
             wlanstr = '   WLAN:   ' + wlanstr + strftime('   (%H:%M:%S)')
         except:
             wlanstr = '   WLAN:   ' + 'failed' + strftime('   (%H:%M:%S)')
-        #wlnstrvar.set(wlanstr)
         q.put(wlanstr)
         root.event_generate('<<update_wlnstrvar>>', when='tail')
-        try:
-            ptuncmd = Popen(tuncmd, stdout=PIPE, shell=True)
-            tuncmdout, _ = ptuncmd.communicate()
-            tunstr = tuncmdout.split("time=", 1)[1].rstrip()
-            tunstr = 'TUNNEL:   ' + tunstr + strftime('   (%H:%M:%S)')
-        except:
-            tunstr = 'TUNNEL:   ' + 'failed' + strftime('   (%H:%M:%S)')
-        #tunstrvar.set(tunstr)
-        q.put(tunstr)
-        root.event_generate('<<update_tunstrvar>>', when='tail')
         sleep(1)
 
 
 def status():
-    t_run = Thread(target=run)
-    t_run.setDaemon(True)
-    t_run.start()
+    t1_run = Thread(target=runtun)
+    t1_run.setDaemon(True)
+    t1_run.start()
+    t2_run = Thread(target=runwln)
+    t2_run.setDaemon(True)
+    t2_run.start()
 
 
 if __name__ == '__main__':

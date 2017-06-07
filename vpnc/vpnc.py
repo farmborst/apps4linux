@@ -18,57 +18,72 @@ def restartopenvpn():
     sleep(3)
 
 
-def runtun():
-    tuncmd = 'ssh root@192.168.0.1 "ping -I tun0 -c1 8.8.8.8 | grep ttl"'
+def check():
+    cmd = 'ssh root@192.168.0.1 "ping -I wlan0 -c1 8.8.8.8 | grep ttl && ping -I tun0 -c1 8.8.8.8 | grep ttl"'
     while 1:
+        timestring = strftime('   (%H:%M:%S)')
+        pcmd = Popen(cmd, stdout=PIPE, stderr=PIPE, shell=True)
+        cmdout, _ = pcmd.communicate()
+        lines = cmdout.splitlines()
         try:
-            ptuncmd = Popen(tuncmd, stdout=PIPE, shell=True)
-            tuncmdout, _ = ptuncmd.communicate()
-            tunstr = tuncmdout.split("time=", 1)[1].rstrip()
-            tunstr = 'TUNNEL:   ' + tunstr + strftime('   (%H:%M:%S)')
+            wlanstr = lines[0].split("time=", 1)[1].rstrip()
+            wlanstr = '        WLAN:   ' + wlanstr + timestring
         except:
-            tunstr = 'TUNNEL:   ' + 'failed' + strftime('   (%H:%M:%S)')
-        q.put(tunstr)
-        root.event_generate('<<update_tunstrvar>>', when='tail')
-        sleep(1)
-
-
-def runwln():
-    wlncmd = 'ssh root@192.168.0.1 "ping -I wlan0 -c1 8.8.8.8 | grep ttl"'
-    while 1:
+            wlanstr = '        WLAN:   ' + 'failed' + timestring
         try:
-            pwlncmd = Popen(wlncmd, stdout=PIPE, shell=True)
-            wlncmdout, _ = pwlncmd.communicate()
-            wlanstr = wlncmdout.split("time=", 1)[1].rstrip()
-            wlanstr = '   WLAN:   ' + wlanstr + strftime('   (%H:%M:%S)')
+            tunstr = lines[1].split("time=", 1)[1].rstrip()
+            tunstr = '    TUNNEL:   ' + tunstr + timestring
         except:
-            wlanstr = '   WLAN:   ' + 'failed' + strftime('   (%H:%M:%S)')
-        q.put(wlanstr)
-        root.event_generate('<<update_wlnstrvar>>', when='tail')
-        sleep(1)
+            tunstr = 'TUNNEL:   ' + 'failed' + timestring
+        q.put([wlanstr, tunstr])
+        root.event_generate('<<update_strings>>', when='tail')
+        sleep(5)
 
 
 def status():
-    t1_run = Thread(target=runtun)
-    t1_run.setDaemon(True)
-    t1_run.start()
-    t2_run = Thread(target=runwln)
-    t2_run.setDaemon(True)
-    t2_run.start()
+    t_run = Thread(target=check)
+    t_run.setDaemon(True)
+    t_run.start()
+
+
+def mountmedia():
+    cmd = 'sshfs -o follow_symlinks media@192.168.0.1: /mnt/media/'
+    call(cmd, shell=True)
+
+
+def unmountmedia():
+    cmd = 'fusermount -u /mnt/media/'
+    call(cmd, shell=True)
+
+
+def mountfelix():
+    cmd = 'sshfs -o follow_symlinks felix@192.168.0.1: /home/user/mnt/felix/'
+    call(cmd, shell=True)
+
+
+def unmountfelix():
+    cmd = 'fusermount -u /home/user/mnt/felix/'
+    call(cmd, shell=True)
 
 
 if __name__ == '__main__':
     root = Tk()
     q = Queue()
     root.title('VPN STATUS')
-    wlnstrvar = StringVar()
-    tunstrvar = StringVar()
-    update_wlnstrvar = lambda event: wlnstrvar.set(q.get())
-    update_tunstrvar = lambda event: tunstrvar.set(q.get())
-    root.bind('<<update_wlnstrvar>>', update_wlnstrvar)
-    root.bind('<<update_tunstrvar>>', update_tunstrvar)
+    wlnstrvar, tunstrvar = StringVar(), StringVar()
+
+    def update_strings(event):
+        wlnstr, tunstr = q.get()
+        wlnstrvar.set(wlnstr)
+        tunstrvar.set(tunstr)
+
+    root.bind('<<update_strings>>', update_strings)
     wln0label = Label(root, fg='blue', textvariable=wlnstrvar).pack()
     tun0label = Label(root, fg='red', textvariable=tunstrvar).pack()
-    restart = Button(root, text='Restart', width=25, command=restartopenvpn).pack()
+    Button(root, text='Restart', width=25, command=restartopenvpn).pack()
+    Button(root, text='mount media', width=25, command=mountmedia).pack()
+    Button(root, text='unmount media', width=25, command=unmountmedia).pack()
+    Button(root, text='mount felix', width=25, command=mountfelix).pack()
+    Button(root, text='unmount felix', width=25, command=unmountfelix).pack()
     status()
     mainloop()

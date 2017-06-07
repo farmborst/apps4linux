@@ -1,0 +1,12 @@
+[Desktop Entry]
+Version=1.0
+Name=vpnc
+
+GenericName=OpenVPN control
+
+Exec=/home/data/science/github/apps4linux/sshmounter/sshmnt.py
+Icon=/home/data/science/github/apps4linux/vpnc/vpnc.svg
+Type=Application
+
+Categories=System;
+Name[de_DE]=sshmnt

@@ -3,10 +3,10 @@
 # ssh-keygen -t rsa -b 4096 -C "your_email@example.com"
 from __future__ import print_function, division
 try:
-    from Tkinter import Tk, StringVar, Label, Button
+    from Tkinter import Tk, StringVar, Label, Button, W, BOTH, LEFT
     from Queue import Queue, Empty
 except ImportError:
-    from tkinter import Tk, StringVar, Label, Button
+    from tkinter import Tk, StringVar, Label, Button, W, BOTH, LEFT
     from queue import Queue, Empty
 from subprocess import Popen, PIPE, call
 from time import sleep, strftime
@@ -34,60 +34,78 @@ class NBSR:  # Non blocking stream reader
             return None
 
 
-def check(r, q, proc):
+def check(r, q):
 
-    nbsr = NBSR(proc.stdout)
-
-    def execute(cmd):
+    def execute(proc, cmd):
         proc.stdin.write(cmd + ' \n')
 
-    def emptystdout():
+    def emptystdout(nbsr):
         while 1:
-            output = nbsr.readline(timeout=0.5)
+            output = nbsr.readline(timeout=1)
             if not output:
                 break
 
-    def printstdout():
-        while 1:
-            output = nbsr.readline(timeout=0.5)
-            if not output:
-                break
-            print(output)
-
-    def getstdout():
+    def getstdout(nbsr):
         output = []
         while 1:
-            tmpoutput = nbsr.readline(timeout=0.5)
+            tmpoutput = nbsr.readline(timeout=2)
             if not tmpoutput:
                 return output
                 break
             output.append(tmpoutput)
 
-    emptystdout()
+    def out2str(iface, nbsr, results, index, timestring):
+        out = getstdout(nbsr)
+        try:
+            resptime = out[0].split("time=", 1)[1].rstrip()
+        except:
+            resptime = 'failed'
+        results[index] = '{0:>8}: {1:<8} {2}'.format(iface, resptime, timestring)
+
+    results = [None] * 3
+    procs, nbsrs = [], []
+
+    cmnds = ['bash',
+             'ssh -T root@192.168.0.1',
+             'ssh -T root@192.168.0.1']
+
+    for cmd in cmnds:
+        procs.append(Popen(cmd, shell=True, stdin=PIPE, stderr=PIPE,
+                           stdout=PIPE, universal_newlines=True, bufsize=0))
+    for proc in procs:
+        nbsrs.append(NBSR(proc.stdout))
+
+    for nbsr in nbsrs:
+        emptystdout(nbsr)
+
+    ifaces = ['SERVER',
+              'WLAN',
+              'TUNNEL']
+    cmnds = ['ping -c1 -W1.5 192.168.0.1 | grep ttl',
+             'ping -I wlan0 -c1 -W1.5 8.8.8.8 | grep ttl',
+             'ping -I tun0 -c1 -W1.5 8.8.8.8 | grep ttl']
 
     while q['run'].empty():
         timestring = strftime('   (%H:%M:%S)')
-        execute('ping -I wlan0 -c1 8.8.8.8 | grep ttl')
-        wlnout = getstdout()
-        execute('ping -I tun0 -c1 8.8.8.8 | grep ttl')
-        tunout = getstdout()
-        try:
-            wlanstr = wlnout[0].split("time=", 1)[1].rstrip()
-            wlanstr = '        WLAN:   ' + wlanstr + timestring
-        except:
-            wlanstr = '        WLAN:   ' + 'failed' + timestring
-        try:
-            tunstr = tunout[0].split("time=", 1)[1].rstrip()
-            tunstr = '    TUNNEL:   ' + tunstr + timestring
-        except:
-            tunstr = 'TUNNEL:   ' + 'failed' + timestring
-        q['str'].put([wlanstr, tunstr])
+
+        for proc, cmd in zip(procs, cmnds):
+            execute(proc, cmd)
+
+        threads = []
+        for i, iface in enumerate(ifaces):
+            threads.append(Thread(target=out2str, args=(iface, nbsrs[i], results, i, timestring)))
+        for thread in threads:
+            thread.start()
+        for thread in threads:
+            thread.join()
+
+        q['str'].put(results)
         r.event_generate('<<update_label>>', when='tail')
-        sleep(1)
+        sleep(0.1)
 
 
-def status(r, q, proc):
-    t_run = Thread(target=check, args=(r, q, proc))
+def status(r, q):
+    t_run = Thread(target=check, args=(r, q))
     t_run.setDaemon(True)
     t_run.start()
 
@@ -134,17 +152,24 @@ class GUI:
         self.q['str'] = Queue()
 
     def layout(self):
-        self.wlnstr, self.tunstr = StringVar(), StringVar()
-        Label(self.r, fg='blue', textvariable=self.wlnstr).pack()
-        Label(self.r, fg='red', textvariable=self.tunstr).pack()
-        Button(self.r, text='Restart', width=25, command=restartopenvpn).pack()
-        Button(self.r, text='Mount Media', width=25, command=mountmedia).pack()
-        Button(self.r, text='Unmount Media', width=25, command=unmountmedia).pack()
-        Button(self.r, text='Mount Felix', width=25, command=mountfelix).pack()
-        Button(self.r, text='Unmount Felix', width=25, command=unmountfelix).pack()
+        packsets = {'fill'   : BOTH,
+                    'expand' : 1,
+                    'anchor' : 'w'}
+        lablsets = {'font'   : 'mono',
+                    'anchor' : 'w'}
+        self.srvstr, self.wlnstr, self.tunstr = StringVar(), StringVar(), StringVar()
+        Label(self.r, fg='green', textvariable=self.srvstr, **lablsets).pack(packsets)
+        Label(self.r, fg='blue', textvariable=self.wlnstr, **lablsets).pack(packsets)
+        Label(self.r, fg='red', textvariable=self.tunstr, **lablsets).pack(packsets)
+        Button(self.r, text='Restart', width=25, command=restartopenvpn).pack(packsets)
+        Button(self.r, text='Mount Media', width=25, command=mountmedia).pack(packsets)
+        Button(self.r, text='Unmount Media', width=25, command=unmountmedia).pack(packsets)
+        Button(self.r, text='Mount Felix', width=25, command=mountfelix).pack(packsets)
+        Button(self.r, text='Unmount Felix', width=25, command=unmountfelix).pack(packsets)
 
     def updatelabels(self, event):
-        wlnstr, tunstr = self.q['str'].get()
+        srvstr, wlnstr, tunstr = self.q['str'].get()
+        self.srvstr.set(srvstr)
         self.wlnstr.set(wlnstr)
         self.tunstr.set(tunstr)
 
@@ -157,7 +182,5 @@ class GUI:
 
 if __name__ == '__main__':
     app = GUI()
-    proc = Popen('ssh -T root@192.168.0.1', shell=True, stdin=PIPE,
-                 stderr=PIPE, stdout=PIPE, universal_newlines=True, bufsize=0)
-    status(app.r, app.q, proc)
+    status(app.r, app.q)
     app.mainloop()

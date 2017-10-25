@@ -82,7 +82,7 @@ def check(r, q):
               'WLAN',
               'TUNNEL']
     cmnds = ['ping -c1 -W1.5 192.168.0.1 | grep ttl',
-             'ping -I wlan0 -c1 -W1.5 8.8.8.8 | grep ttl',
+             'ping -I wlp2s0 -c1 -W1.5 8.8.8.8 | grep ttl',
              'ping -I tun0 -c1 -W1.5 8.8.8.8 | grep ttl']
 
     while q['run'].empty():

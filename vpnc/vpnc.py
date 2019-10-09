@@ -125,7 +125,7 @@ def unmountmedia():
 
 
 def mountfelix():
-    cmd = 'sshfs -o follow_symlinks felix@192.168.0.1: /home/user/mnt/felix/'
+    cmd = 'sshfs -o follow_symlinks felix@192.168.0.1: /home/inp/mnt/felix/'
     call(cmd, shell=True)
 
 
